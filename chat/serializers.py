@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from chat.models import Thread
+from chat.models import Thread, Message
 from user.serializers import UserThreadListSerializer
 
 
@@ -40,3 +40,18 @@ class ThreadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Thread
         fields = ["id", "participants", "created", "updated"]
+
+
+class MessageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Message
+        fields = ["id", "sender", "created", "is_read", "text", "thread"]
+        read_only_fields = ["sender", "is_read", "thread"]
+
+    def create(self, validated_data):
+        message = Message.objects.create(**validated_data)
+        thread = message.thread
+        thread.updated = message.created
+        thread.save()
+        return message
