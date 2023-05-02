@@ -1,7 +1,10 @@
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, mixins, generics, status
+from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.response import Response
 
-from chat.models import Thread
-from chat.serializers import ThreadSerializer, ThreadCreateSerializer
+from chat.models import Thread, Message
+from chat.serializers import ThreadSerializer, ThreadCreateSerializer, MessageSerializer
 
 
 class ThreadViewSet(mixins.CreateModelMixin,
@@ -30,3 +33,48 @@ class ThreadViewSet(mixins.CreateModelMixin,
                 return self.queryset.filter(participants=self.request.user)
         else:
             return self.queryset.filter(participants=self.request.user)
+
+
+class MessageViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet
+):
+    queryset = Message.objects.all()
+    serializer_class = MessageSerializer
+
+    def get_queryset(self):
+        thread_id = self.kwargs.get("threads_pk")
+        try:
+            thread = Thread.objects.get(id=thread_id)
+        except Thread.DoesNotExist:
+            raise NotFound("A thread with given id does not exist")
+        if self.request.user not in thread.participants.all():
+            raise PermissionDenied(
+                {"message": "You do not have access"}
+            )
+        return self.queryset.filter(thread=thread).filter(thread__participants=self.request.user)
+
+    def perform_create(self, serializer):
+        thread_id = self.kwargs.get("threads_pk")
+        thread = generics.get_object_or_404(Thread, id=thread_id)
+        return serializer.save(sender=self.request.user, thread=thread)
+
+    @action(
+        methods=["GET"],
+        url_path="mark_as_read",
+        detail=True,
+    )
+    def mark_as_read(self, request, pk=None, threads_pk=None):
+        message_id = self.kwargs.get("pk")
+        try:
+            message = Message.objects.get(id=message_id)
+        except Message.DoesNotExist:
+            raise NotFound("A message with given id does not exist")
+        message.is_read = True
+        message.save()
+        serializer = MessageSerializer(message)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
