@@ -1,5 +1,5 @@
 from rest_framework import viewsets, mixins, generics, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 
@@ -78,3 +78,16 @@ class MessageViewSet(
 
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+@api_view(["GET"])
+def unread_messages(request):
+    unread_messages = Message.objects.filter(sender=request.user).filter(is_read=False)
+    threads_with_unread_messages = []
+    for messages in unread_messages:
+        threads_with_unread_messages.append(messages.thread.id)
+    number_of_unread_messages = unread_messages.count()
+    return Response(
+        {"number_of_unread_messages": number_of_unread_messages,
+         "threads": set(threads_with_unread_messages)},
+        status=status.HTTP_200_OK
+    )
