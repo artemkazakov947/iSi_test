@@ -1,12 +1,27 @@
-from rest_framework.routers import DefaultRouter
+from django.urls import path, include
+from rest_framework_nested.routers import SimpleRouter, NestedSimpleRouter
+from chat.views import ThreadViewSet, MessageViewSet
 
-from chat.views import ThreadViewSet
-
-router = DefaultRouter()
+router = SimpleRouter()
 
 router.register("threads", ThreadViewSet)
 
-urlpatterns = router.urls
+message_router = NestedSimpleRouter(
+    router,
+    r"threads",
+    lookup="threads"
+)
+
+message_router.register(
+    r"messages",
+    MessageViewSet,
+    basename="threads-messages"
+)
+
+urlpatterns = [
+    path("", include(router.urls)),
+    path("", include(message_router.urls))
+]
 
 
 app_name = "chat"
