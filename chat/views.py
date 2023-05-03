@@ -1,3 +1,4 @@
+from django.utils.functional import cached_property
 from rest_framework import viewsets, mixins, generics, status
 from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import NotFound, PermissionDenied
@@ -32,15 +33,17 @@ class ThreadViewSet(mixins.CreateModelMixin,
         return serializers[self.action]
 
     def get_queryset(self):
+        queryset = self.queryset.prefetch_related("participants")
         user = self.request.GET.get("user")
 
         if self.request.user.is_staff:
             if user:
-                return self.queryset.filter(participants=user)
+                queryset = queryset.filter(participants=user)
             else:
-                return self.queryset.filter(participants=self.request.user)
+                queryset = queryset.filter(participants=self.request.user)
         else:
-            return self.queryset.filter(participants=self.request.user)
+            queryset = queryset.filter(participants=self.request.user)
+        return queryset
 
 
 class MessagePagination(PageNumberPagination):
@@ -55,26 +58,24 @@ class MessageViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet
 ):
-    queryset = Message.objects.all()
+    queryset = Message.objects.all().select_related("thread", "sender")
     serializer_class = MessageSerializer
     pagination_class = MessagePagination
 
-    def get_queryset(self):
+    @cached_property
+    def thread(self):
         thread_id = self.kwargs.get("threads_pk")
         try:
             thread = Thread.objects.get(id=thread_id)
         except Thread.DoesNotExist:
             raise NotFound("A thread with given id does not exist")
-        if self.request.user not in thread.participants.all():
-            raise PermissionDenied(
-                {"message": "You do not have access"}
-            )
-        return self.queryset.filter(thread=thread).filter(thread__participants=self.request.user)
+        return thread
+
+    def get_queryset(self):
+        return self.queryset.filter(thread=self.thread).filter(thread__participants=self.request.user)
 
     def perform_create(self, serializer):
-        thread_id = self.kwargs.get("threads_pk")
-        thread = generics.get_object_or_404(Thread, id=thread_id)
-        return serializer.save(sender=self.request.user, thread=thread)
+        return serializer.save(sender=self.request.user, thread=self.thread)
 
     @action(
         methods=["GET"],
@@ -96,7 +97,7 @@ class MessageViewSet(
 
 @api_view(["GET"])
 def unread_messages(request):
-    unread_messages = Message.objects.filter(sender=request.user).filter(is_read=False)
+    unread_messages = Message.objects.filter(sender=request.user).filter(is_read=False).prefetch_related("thread")
     threads_with_unread_messages = []
     for messages in unread_messages:
         threads_with_unread_messages.append(messages.thread.id)
