@@ -1,10 +1,17 @@
 from rest_framework import viewsets, mixins, generics, status
 from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from chat.models import Thread, Message
 from chat.serializers import ThreadSerializer, ThreadCreateSerializer, MessageSerializer
+
+
+class ThreadPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 20
 
 
 class ThreadViewSet(mixins.CreateModelMixin,
@@ -14,6 +21,7 @@ class ThreadViewSet(mixins.CreateModelMixin,
                     viewsets.GenericViewSet):
     serializer_class = ThreadSerializer
     queryset = Thread.objects.all()
+    pagination_class = ThreadPagination
 
     def get_serializer_class(self):
         serializers = {
@@ -35,6 +43,12 @@ class ThreadViewSet(mixins.CreateModelMixin,
             return self.queryset.filter(participants=self.request.user)
 
 
+class MessagePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 40
+
+
 class MessageViewSet(
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
@@ -43,6 +57,7 @@ class MessageViewSet(
 ):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
+    pagination_class = MessagePagination
 
     def get_queryset(self):
         thread_id = self.kwargs.get("threads_pk")
