@@ -1,7 +1,7 @@
 from django.utils.functional import cached_property
-from rest_framework import viewsets, mixins, generics, status
+from rest_framework import viewsets, mixins, status
 from rest_framework.decorators import action, api_view
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
